@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+#
+########################################################################################################################
+########################################################################################################################
+##
+##      Copyright (C) 2020 Peter Walsh, Milford, NH 03055
+##      All Rights Reserved under the MIT license as outlined below.
+##
+##  FILE
+##      CoilScanDL
+##
+##      *** THIS IS A PROGRAM, NOT A COMMAND. USER MUST EDIT THIS FILE! ***
+##
+##  DESCRIPTION
+##      Scan through coil parameters, printing information for each coil.
+##
+##      Given:          LTarget     The target inductance
+##
+##                      DMin        A minimum coil diameter
+##                      DMax        A maximum coil diameter
+##                      DInc        Coil diameter increment
+##
+##                      lMin        A minimum coil length
+##                      lMax        A macimum coil length
+##                      lInc        Coil length increment
+##
+##                      d           The wire diameter
+##                      f           The frequency of interest
+##                      p           Wire plating number
+##                          =0          annealed copper
+##                          =1          hard-drawn copper
+##                          =2          silver
+##                          =3          aluminium
+##
+##      This program will scan from DMin to DMax (D=coil-diameter) and lMin to lMax (l=coil length),
+##        and at each point set the number of turns so that the coil matches the target inductance.
+##
+##      For each generated coil, the program will call UserFilter() and then print the coil info.
+##
+##      The printed lines are in .CSV file format, one line per coil. These may be directly plotted
+##        using gnuplot, viz:
+##
+##          CoilScanDL >Data.csv    # Generate results, save as .CSV file
+##
+##          gnuplot                 # Start gnuplot
+##          > set xlabel "Dia"
+##          > set ylabel "len"
+##          > set zlabel "Q";  splot 'Data.csv' using 1:2:3         # Q is column 3
+##          > set zlabel "C";  splot 'Data.csv' using 1:2:7         # C is column 7
+##          > set zlabel "Ft"; splot 'Data.csv' using 1:2:8         # Wire len is column 8
+##
+##      Coils with individual column values can be selected using awk. Here's an example that
+##        selects all lines where C_p (column 7, shown as $7) is literal "2.00" and saves
+##        the results as a new .CSV file:
+##
+##          awk -F',' '$7 == 2.00' Data.csv >Cap2Coils.csv
+##
+##  USAGE
+##      No command line parameters. User must set the parameters listed in the program below.
+##
+##      STEP1: User should adjust the scan parameters below (in section labelled "USER MODIFICATION STEP 1")
+##              as needed for their application.
+##
+##      STEP2: User should modify the function "UserFilter" below to select specific filters of interest
+##              as needed for their application.
+##
+##      STEP3: Run the program and capture the output.
+##
+##      User may perform further modification if needed. For example, to print different CSV columns, or
+##        to print in a different format.
+##
+########################################################################################################################
+########################################################################################################################
+##
+##  MIT LICENSE
+##
+##  Permission is hereby granted, free of charge, to any person obtaining a copy of
+##    this software and associated documentation files (the "Software"), to deal in
+##    the Software without restriction, including without limitation the rights to
+##    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+##    of the Software, and to permit persons to whom the Software is furnished to do
+##    so, subject to the following conditions:
+##
+##  The above copyright notice and this permission notice shall be included in
+##    all copies or substantial portions of the Software.
+##
+##  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+##    INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+##    PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+##    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+##    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+##    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##
+########################################################################################################################
+########################################################################################################################
+
+import sys, signal
+
+sys.path.append('../lib')
+
+from   Coil  import Coil
+from   fzero import fzero
+import copy
+
+########################################################################################################################
+########################################################################################################################
+#
+# USER MODIFICATION STEP 1: Set the scan parameters below
+#
+LTarget = 26.0      # Inductance of interest, in uH
+
+DMin    = 20        # Minimum D to scan, in mm
+DMax    = 280       # Maximum D to scan, in mm
+DInc    = 5         # D increment      , in mm
+
+lMin    = 20        # Minimum l to scan, in mm
+lMax    = 300       # Maximum l to scan, in mm
+lInc    = 5         # l increment      , in mm
+
+d       = 6.35      # 1/4" copper pipe diameter    , in mm
+#d       = 3.2639    # 8 AWG wire      diameter    , in mm
+#d       = 1.291     # 16 AWG wire      diameter    , in mm
+f       = 13.562    # Frequency of interest, in MHz
+p       = 0         # Index into plating table
+                    #   =0 annealed copper
+                    #   =1 hard-drawn copper
+                    #   =2 silver
+                    #   =3 aluminium
+
+#
+# Some flags of interest. Set to True or False as needed
+#
+PrintNaNLines   = False     # Print NaN entries, as well as valid coils
+
+ShowLengthInFt  = True      # Length of conductor is in feet
+ShowLengthInM   = False     # Length of conductor is in meters (mm is default)
+
+#
+# If nonzero, these next numbers will filter the results based on frequency, capacitance, and so on.
+#
+# To disable a specific filter, set the value to zero.
+#
+SelfResMin = 0      # Minimum self-resonance in filtered solutions (MHz)
+QMin       = 0      # Minimum Q              in filtered solutions
+
+#
+# End of scan parameters
+#
+########################################################################################################################
+########################################################################################################################
+
+TestCoil = Coil(DMin,3,lMin,d,f,p)
+
+########################################################################################################################
+#
+# For each coil calculated, this function is called so that any user modificaions can be
+#   applied.
+#
+# Most of the filters parametrized above are applied in this function; for example, the
+#   coil self resonance is compared to SelfResMin (defined above), and if it's too small
+#   the coil error code is set, which will cause the coil printed line to be "NaN".
+#
+# The user should modify this function to suit their individual needs:
+#
+#   1) Set the error code non-zero for coils that should not be included in the output
+#
+#   2) Keep track of minimum or maximum values of interest.
+#
+# Example1: the following code will set the error code for all coils where the Q value
+#   is too small to be useful for the application, thus those coils will not be
+#   included in the output:
+#
+#             #
+#             # Ignore coils for which Q < 2800
+#             #
+#             if TestCoil.Q_eff < 2800:
+#                 TestCoil.error_code = 1
+#                 TestCoil.error_msg  = "Q too small"
+#
+# Example2: the following code will note the coil with the largest Q:
+#
+#             if TestCoil.error_code == 0:
+#                 if TestCoil.Q_eff > MaxQCoil.Q_eff:
+#                     MaxQCoil = copy.deepcopy(TestCoil)
+#
+# Other useful filters might be: note coil with minimum conductor length (for
+#   efficient use of expensive silver wire), ignore coils with a capacitance
+#   too high to be useful, and so on.
+#
+########################################################################################################################
+########################################################################################################################
+#
+# UserFilter - Filter the coil results as they are calculated
+#
+# Inputs:   Coil to check
+#
+# Output:   Coil.error_code set non-zero when coil results invalid
+#
+def UserFilter(Coil):
+
+    ###############################################################################
+    #
+    # Filter out coils for which Q is too low to be useful
+    #
+    if QMin > 0:
+        if Coil.Q_eff < QMin:
+            Coil.error_code = 10
+            Coil.error_msg  = "Q lower than allowed minimum"
+
+
+    ###############################################################################
+    #
+    # Filter out coils for which self resonance is too low to be useful
+    #
+    if SelfResMin > 0:
+        if Coil.f_res < SelfResMin:
+            Coil.error_code = 11
+            Coil.error_msg  = "F_res lower than allowed minimum"
+
+
+########################################################################################################################
+########################################################################################################################
+#
+# CoilScanDL - Scan across coil D and l values
+#
+# Inputs:   None.
+#
+# Outputs:  None. Program output is printed to terminal
+#
+def CoilScanDL():
+
+    LenArg = "mm"
+
+    if ShowLengthInFt:
+        LenArg = "ft"
+
+    elif ShowLengthInM:
+        LenHdr = "m"
+
+    TestCoil.LTarget = LTarget
+    TestCoil.PrintCSVHeader(LenArg,
+                            "# DMin = %3d, " % DMin + "DMax = %3d, " % DMax + "DInc = %3d" % DInc,
+                            "# lMin = %3d, " % lMin + "lMax = %3d, " % lMax + "lInc = %3d" % lInc)
+
+    PrintCount = 0
+
+    TestCoil.D = DMin - DInc
+    while TestCoil.D <= DMax:
+
+        TestCoil.D += DInc
+
+        TestCoil.l = lMin - lInc
+        while TestCoil.l <= lMax:
+
+            TestCoil.l += lInc
+
+            TestCoil.InterpolateTurns(LTarget)
+
+            UserFilter(TestCoil)
+
+            #
+            # Don't print unused entries if requested
+            #
+            if TestCoil.error_code != 0 and not PrintNaNLines:
+                continue
+
+            #
+            # Print an occasional column header, so a human editing the output can
+            #   easily see the columns when the full header is offscreen.
+            #
+            if (PrintCount % 30) == 0:
+                TestCoil.PrintCSVColumnHeader(LenArg);
+
+            TestCoil.PrintCSV(LenArg)
+
+            PrintCount += 1
+
+
+########################################################################################################################
+#
+# Allow Ctrl-C to terminate the program. Python is crazy stupid for the simplest things.
+#
+# Note: Win32 section is untested.
+#
+def CtrlC_Handler(sig, frame):
+#    print('Ctrl-C!')
+    print()
+    import os
+    os._exit(0)
+
+if sys.platform == "win32":
+    import win32api
+    win32api.SetConsoleCtrlHandler(CtrlC_Handler, True)
+else:
+    signal.signal(signal.SIGINT, CtrlC_Handler)
+
+########################################################################################################################
+#
+if __name__ == "__main__":
+    CoilScanDL()
+    sys.exit(0)

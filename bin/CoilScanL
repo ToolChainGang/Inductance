@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+#
+########################################################################################################################
+########################################################################################################################
+##
+##      Copyright (C) 2020 Peter Walsh, Milford, NH 03055
+##      All Rights Reserved under the MIT license as outlined below.
+##
+##  FILE
+##      CoilScanL
+##
+##  DESCRIPTION
+##      Scan through progressive coil parameters, printing information for each coil.
+##
+##      Given:          LTarget     The target inductance
+##
+##                      DForm       The coil form diameter
+##
+##                      lMin        A minimum coil length
+##                      lMax        A maximum coil length
+##                      lInc        Coil length increment
+##
+##                      d           The wire diameter
+##                      f           The frequency of interest
+##                      p           Wire plating number (OPTIONAL)
+##                          =0          annealed copper (DEFAULT)
+##                          =1          hard-drawn copper
+##                          =2          silver
+##                          =3          aluminium
+##
+##      This program will scan from lMin to lMax (DForm=form-diameter) and at each point interpolate
+##        the number of turns so that the coil schieves the target inductance. For each generated coil,
+##        the program will print the coil info.
+##
+##      Note that DForm is the diameter of the *form* on which the coil is wound. The parameter "D"
+##        in the output is the resulting coil diameter, which is form diameter plus wire diameter.
+##
+##      The printed lines are in .CSV file format, one line per coil. These may be directly plotted
+##        using gnuplot, viz:
+##
+##          CoilScanL ...       >Data.csv       # Generate results, save as .CSV file
+##
+##          gnuplot                             # Start gnuplot
+##          > set xlabel "len"
+##          > set ylabel "Q"
+##          > plot 'Data.csv' using 2:3         # l is column 2, Q is column 3
+##
+##      Coils with individual column values can be selected using awk. Here's an example that
+##        selects all lines where wLen (column 7, shown as $7) is less than "18.00" and saves
+##        the results as a new .CSV file:
+##
+##          awk -F',' '$7 < 18.00' Data.csv >ShortCoils.csv
+##
+##      Note: Dia, the first column, is the coil diameter, which is the form diameter plus the conductor
+##        diameter.
+##
+##  USAGE
+##      See the PrintUsage() function below.
+##
+########################################################################################################################
+########################################################################################################################
+##
+##  MIT LICENSE
+##
+##  Permission is hereby granted, free of charge, to any person obtaining a copy of
+##    this software and associated documentation files (the "Software"), to deal in
+##    the Software without restriction, including without limitation the rights to
+##    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+##    of the Software, and to permit persons to whom the Software is furnished to do
+##    so, subject to the following conditions:
+##
+##  The above copyright notice and this permission notice shall be included in
+##    all copies or substantial portions of the Software.
+##
+##  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+##    INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+##    PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+##    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+##    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+##    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##
+########################################################################################################################
+########################################################################################################################
+
+import sys, getopt, signal
+
+sys.path.append('../lib')
+
+from   Coil  import Coil
+from   fzero import fzero
+import copy
+
+########################################################################################################################
+########################################################################################################################
+##
+## Data declarations
+##
+########################################################################################################################
+########################################################################################################################
+
+LTarget = 0     # Inductance of interest, in uH
+DForm   = 0     # Coil form diameter, in mm
+
+lMin    = 0     # Minimum l to scan , in mm
+lMax    = 0     # Maximum l to scan , in mm
+lInc    = 0     # l increment       , in mm
+
+d       = 0     # Wire diameter     , in mm
+f       = 0     # Frequency of interest, in MHz
+
+p       = 0     # Index into plating table
+                    #   =0 annealed copper
+                    #   =1 hard-drawn copper
+                    #   =2 silver
+                    #   =3 aluminium
+
+def PrintUsage():
+    print()
+    print("Usage: ")
+    print()
+    print('    CoilScanL --LTarget=<ind-uH>  --DForm=<form-dia-mm>                    \\')
+    print('              --lMin=<min-len-mm> --lMax=<max-len-mm> --lInc=<inc-len-mm>  \\')
+    print('              --d=<wire-dia-mm>   --f=<freq-mhz> \\')
+    print('             [--LenMM] [--LenFt] [--p=<plating-index>]')
+    print()
+    print("Where:")
+    print()
+    print("    --LTarget=<ind-uH>       Target inductance in uH")
+    print("    --DForm=<form-dia-mm>    Form diameter, in mm")
+    print()
+    print("    --lMin=<coil-len-mm>     Min coil length to scan, in mm")
+    print("    --lMax=<coil-len-mm>     Max coil length to scan, in mm")
+    print("    --lInc=<coil-len-mm>     Coil length increment  , in mm")
+    print()
+    print("    --d=<wire-dia-mm>        Wire diameter, in mm")
+    print("    --d=<some-number>AWG     Wire specified as AWG")
+    print("    --f=<freq-mhz>           Frequency of interest")
+    print()
+    print("    --p=<plating-index>      (OPTIONAL) Wire plating")
+    print("             =0                  annealed copper (DEFAULT)")
+    print("             =1                  hard-drawn copper")
+    print("             =2                  silver")
+    print("             =3                  aluminium")
+    print()
+    print("    --LenM                   (OPTIONAL) Print conductor length in meters")
+    print("    --LenFt                  (OPTIONAL) Print conductor length in feet")
+    print()
+    print("    --help                   Print this message and exit")
+
+def ErrorExit(Msg):
+    print()
+    print("*** " + Msg + " ***")
+    PrintUsage()
+    print()
+    sys.exit(2)
+
+ShowLengthIn = "m"      # Length of conductor is in "m"=meters, "mm"=millimeters, "ft"=feet
+
+########################################################################################################################
+########################################################################################################################
+#
+# CoilScanL - Scan across coil l (length) values and print parameters.
+#
+# Inputs:   See Usage() above.
+#
+# Outputs:  None. Program output is printed to terminal
+#
+def CoilScanL():
+    global LTarget, DForm, lMin, lMax, lInc, d, f, p
+
+    ParseCommandLine()
+
+    TestCoil = Coil(DForm+d,3,lMin,d,f,p)
+
+    TestCoil.LTarget = LTarget
+    TestCoil.PrintCSVHeader(ShowLengthIn,
+                            "# DForm = %3d, " % DForm + "lMin  = %3d, " % lMin + "lMax = %3d, " % lMax + "lInc = %3d" % lInc)
+
+    PrintCount = 0
+
+    TestCoil.l = lMin - lInc
+    while TestCoil.l <= lMax:
+
+        TestCoil.l += lInc
+
+        TestCoil.InterpolateTurns(LTarget)
+
+        #
+        # Don't print unused entries
+        #
+        if TestCoil.error_code != 0:
+            continue
+
+        #
+        # Print an occasional column header, so a human editing the output can
+        #   easily see the columns when the full header is offscreen.
+        #
+        if (PrintCount % 30) == 0:
+            TestCoil.PrintCSVColumnHeader(ShowLengthIn);
+
+        TestCoil.PrintCSV(ShowLengthIn)
+
+        PrintCount += 1
+
+
+########################################################################################################################
+########################################################################################################################
+#
+# ParseCommandLine - Grab command line parameters and do some cursory validation
+#
+# Inputs:   None. Uses command line arguments (ie: sys.argv)
+#
+# Outputs:  Global vars above are set from command line arguments
+#
+def ParseCommandLine():
+    global LTarget, DForm, lMin, lMax, lInc, d, f, p
+
+    #
+    # Comversion from AWG to wire diameters in mm for AWG 0 through 40 inclusive.
+    #
+    AWGmm = [ 8.2525, 7.3482, 6.5430, 5.8268, 5.1892, 4.6203, 4.1148, 3.6652, 
+              3.2639, 2.9058, 2.5883, 2.3038, 2.0523, 1.8288, 1.6281, 1.4503, 
+              1.2903, 1.1506, 1.0236, 0.9119, 0.8128, 0.7239, 0.6452, 0.5740, 
+              0.5105, 0.4547, 0.4039, 0.3607, 0.3200, 0.2870, 0.2540, 0.2261, 
+              0.2032, 0.1803, 0.1600, 0.1422, 0.1270, 0.1143, 0.1016, 0.0889, 
+              0.0787 ]
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:],
+                                    "",["LTarget=",
+                                        "DForm=",
+                                        "lMin=",
+                                        "lMax=",
+                                        "lInc=",
+                                        "d=",
+                                        "f=",
+                                        "p=",
+                                        "LenMM",
+                                        "LenFt",
+                                        "help",
+                                        ])
+
+    except getopt.GetoptError:
+        ErrorExit("Unknown or malformed arguments")
+
+    try:
+        for opt, arg in opts:
+            if opt in ('--help'):
+                PrintUsage()
+                sys.exit()
+
+            elif opt in ("--LTarget"):
+                LTarget = float(arg)
+
+            elif opt in ("--DForm"):
+                DForm = float(arg)
+
+            elif opt in ("--lMin"):
+                lMin = float(arg)
+
+            elif opt in ("--lMax"):
+                lMax = float(arg)
+
+            elif opt in ("--lInc"):
+                lInc = float(arg)
+
+            elif opt in ("--LenMM"):
+                ShowLengthIn = "mm"
+
+            elif opt in ("--LenFt"):
+                ShowLengthIn = "ft"
+
+            elif opt in ("--d"):
+                if arg[-3:] == "AWG":
+                    AWG = int(arg[0:len(arg)-3])
+
+                    if AWG < 0 or AWG > 40:
+                        ErrorExit("AWG must be in range 0..40")
+
+                    d = AWGmm[AWG]
+#                    print("AWG " + str(AWG) + "=>" + str(d) + "mm\n")
+
+                else:
+                    d = float(arg)
+
+            elif opt in ("--f"):
+                f = float(arg)
+
+            elif opt in ("--p"):
+                plating = int(arg)
+
+                if plating < 0 or plating > 3:
+                    ErrorExit("Plating must be in range 0..3")
+
+            else:
+                ErrorExit("Unknown argument: " + opt)
+
+    except ValueError as Error:
+        ErrorExit(Error.args[0])
+
+    if LTarget == 0:
+        ErrorExit("Target inductance not specified.")
+
+    if DForm == 0:
+        ErrorExit("Coil form diameter (DForm) not specified.")
+
+    if lMin == 0:
+        ErrorExit("Min coil length not specified.")
+
+    if lMax == 0:
+        ErrorExit("Max coil length not specified.")
+
+    if lInc == 0:
+        ErrorExit("Coil length increment not specified.")
+
+    if d == 0:
+        ErrorExit("Wire diameter not specified.")
+
+    if f == 0:
+        ErrorExit("Frequency not specified.")
+
+
+########################################################################################################################
+########################################################################################################################
+#
+# Allow Ctrl-C to terminate the program. Python is crazy stupid for the simplest things.
+#
+# Note: Win32 section is untested.
+#
+def CtrlC_Handler(sig, frame):
+#    print('Ctrl-C!')
+    print()
+    import os
+    os._exit(0)
+
+if sys.platform == "win32":
+    import win32api
+    win32api.SetConsoleCtrlHandler(CtrlC_Handler, True)
+else:
+    signal.signal(signal.SIGINT, CtrlC_Handler)
+
+
+########################################################################################################################
+########################################################################################################################
+#
+if __name__ == "__main__":
+   CoilScanL()
