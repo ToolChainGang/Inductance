@@ -84,6 +84,8 @@ run these:
 > gnuplot DLPlot.gp                 # Plot the results
 ````
 
+<img src="Images/ScanLQ.svg" alt="GNuplot results" title="Plot of Q versus L" width="30%"/>
+
 ## A note on maximizing Q
 
 Very high Q RF coils are apparently impossible: some experimenters with excellent setups have

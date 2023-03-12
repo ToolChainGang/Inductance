@@ -1,0 +1,10 @@
+#
+# Files used for building
+#
+
+bin/Data.csv
+
+#
+# Emacs temp files
+#
+.\#*
