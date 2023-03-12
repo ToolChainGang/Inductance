@@ -552,7 +552,7 @@ class Coil():
             self.C_p      = 0
             self.f_res    = 0
 
-            self.error_code = 4
+            self.error_code = 3
             self.error_msg  = 'An error occurred when solving for the self-resonant frequency.'
 
 
@@ -626,7 +626,7 @@ class Coil():
         LStart = self.L_eff_s
 
         if LStart < 0:
-            self.error_code = 8
+            self.error_code = 5
             self.error_msg  = 'A 5 turn coil is out of range of the algorithm'
             return
 
@@ -665,7 +665,7 @@ class Coil():
         # Error 4: Range of turns insufficient to get to specified inductance
         #
         if Results['error_code'] == 4:
-            self.error_code = 5
+            self.error_code = 4
             self.error_msg  = 'Range of turns insufficient to get to specified inductance.'
             return
 
