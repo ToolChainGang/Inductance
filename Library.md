@@ -202,7 +202,8 @@ while TestCoil.l <= lMax:
 
 ## Generating CSV output
 
-The Coil() object also has a set of print functions for easy CSV file generation.
+The Coil() object also has a set of print functions for easy CSV file generation. The full CVS header includes the
+program parameters used to generate the plot, and the "ColumnHeader" identifies the columns in the display.
 
 ````
 TestCoil.PrintCSV(Units="mm")                                       # Print the numeric values as a single CSV line
@@ -210,4 +211,23 @@ TestCoil.PrintCSV(Units="mm")                                       # Print the 
 TestCoil.PrintCSVHeader(Units="mm",ExtraLine1="",ExtraLine2="")     # Print the initial CSV header lines
 
 TestCoil.PrintCSVColumnHeader(self,Units="mm")                      # Print the CDV column header
+````
+
+The full CSV header will look something like this:
+
+````
+# CoilScan 2023-03-11 14:00
+#
+# LTarget = 26, d = 6.35, p = 6, f = 13.562
+#
+# DMin =  20, DMax = 280, DInc =   5
+# lMin =  20, lMax = 300, lInc =   5
+#
+# D(mm),   l(mm), Q(plot),      Q,       N,    L(uH), wLen(ft), Res(MHz), pitch(mm), Err, Cmd
+````
+
+While the Column header will look something like this:
+
+````
+# D(mm),   l(mm), Q(plot),      Q,       N,    L(uH), wLen(ft), Res(MHz), pitch(mm), Err, Cmd
 ````
