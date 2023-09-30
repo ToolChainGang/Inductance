@@ -259,6 +259,8 @@ of 26 uH to match the corresponding capacitor at 13.56 MHz.
 
 ````
 
+<img src="Images/CoilExample.svg" alt="GNuplot results" title="Plot of Q versus Len and Dia" width="60%"/>
+
 We see that maximum Q around 7000 (calculated) happens with a coil diameter of 260 mm and
 a length of 90 mm - a short, squat coil.
 
