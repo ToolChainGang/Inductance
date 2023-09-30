@@ -3,7 +3,7 @@
 1. [Characterize existing coils](#characterize-existing-coils)
 2. [Making coils on existing forms](#making-coils-on-existing-forms)
 3. [Silver plated wire](#silver-plated-wire)
-4. [Highly optimized coils](#highly-optimized-coils)
+4. [Making highly optimized coils](#highly-optimized-coils)
 
 ## Characterize existing coils
 
@@ -107,7 +107,7 @@ show the parameters for each coil.
   49.44,  190.00,     876,     876   29.94,    12.00,     4.65,    30.82,      6.35,   0, "CoilCalc --D=49.440 --l=190.000 --N=29.940 --d=1.440 --f=13.562"
 ````
 
-THis looks good, so save the output to a CSV data file and display using Gnuplot.
+This looks good, so save the output to a CSV data file and display using Gnuplot.
 
 ````
 > CoilScanL --LTarget=12 --DForm=48 --lMin=20 --lMax=250 --lInc=10 --d=1.44 --f=13.562 >Data.csv

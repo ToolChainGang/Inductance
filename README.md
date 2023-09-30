@@ -1,14 +1,11 @@
 # Inductance Calculator
 
-A python library for scanning through coil parameters.
+Python programs to make coil design easier.
 
 1. [Background](#background)
 2. [This project](#this-project)
 3. [Usage](#usage)
 4. [Plotting the results](#plotting-the-results)
-5. [A note on maximizing Q](#a-note-on-maximizing-q)
-6. [Coated coil wires](#coated-coil-wires)
-7. [Silver plated wires](#silver-plated-wires)
 
 
 ## Background
@@ -51,20 +48,33 @@ will interpolate the number of turns needed to achieve the inductance at the wid
 length, then print out the Q (and other information) for that coil. From this you can
 choose a design with a high calculated Q value.
 
-You can do the same operation to choose a coil with shortest wire, or the smallest
+You can do the same operation to optimize a coil for shortest wire, or smallest
 total volume, or whatever the designer needs.
 
 ## Usage
+
+All programs accept the --help option to show their parameters.
+
+Use:
+
+* CoilCalc: to calculate and print the parameters of a known coil
+* CoilScanL: Given a specific inductance, scan all possible coil
+lengths, and for each length interpolate the number of turns needed
+for that inductance
+* CoulScanDL: Given a specific inductance, scan through all possible
+coil lengths and diameters, and for each length/diameter pair calculate
+the number of turns needed for that inductance.
 
 See [Quickstart](Quickstart.md) for an introduction on using the programs.
 
 See [Library](Library.md) for writing your own programs.
 
-The 
+See [MaximizingQ](MaximizingQ.md) for notes on maximizing coil Q performance.
+
 
 ## Plotting the results
 
-Generated CSV files can be directly plotted with Gnuplot, making it possible to see
+Generated CSV files can be directly plotted with Gnuplot, to easily see
 trends and maxima/minima in the data.
 
 ````
@@ -86,41 +96,4 @@ run these:
 
 <img src="Images/ScanLQ.svg" alt="GNuplot results" title="Plot of Q versus L" width="30%"/>
 
-## A note on maximizing Q
-
-Very high Q RF coils are apparently impossible: some experimenters with excellent setups have
-suggested that the maximum Q you can achieve physically is about 1000. (Compare with 50,000
-Q variable capacitors available for purchase). Just about anything – including the presence
-of conductive material anywhere in the vicinity of the coil – will tamp down a high Q.
-
-A Q of 200 is a reasonable goal, and 800 might be doable in special circumstances.
-
-## Coated coil wires
-
-<img src="Images/SkinEffect.jpg" alt="Skin effect table" title="Skin effect" width="40%"/>
-
-As shown in the table, coil current at RF passes through a thin surface layer of the conductor.
-
-Copper will oxidize, leaving a mostly non-conductive outer layer in your winding, which acts
-as a resistance due to the skin effect and will dissipate power.
-
-Coils wound using coated wire (usually enamel) to prevent oxidation will have
-better efficiency than coils made of bare wire.
-
-## Silver plated wires
-
-Material | Conductivity
---|--
-Silver 	| 6.30x10<sup>7</sup> S/m
-Copper 	| 5.98x10<sup>7</sup> S/m
-
-Silver is more conductive than copper... by about 5%.
-
-At RF frequencies the skin effect forces the current to flow on the surface of a conductor,
-and for a plated conductor all of the current will flow within the plating thickness.
-
-Since silver has a higher conductivity than copper, you can get a small performance boost
-from using silver plated wire.
-
-Some power RF coils use silver plated wire to reduce power dissipation, but in most cases
-the higher efficiency is not worth the effort or expense.
+<img src="Images/ScanDLQ1.svg" alt="GNuplot results" title="Plot of Q versus L" width="30%"/>
