@@ -65,7 +65,7 @@ for that inductance
 coil lengths and diameters, and for each length/diameter pair calculate
 the number of turns needed for that inductance.
 
-See [Quickstart](Quickstart.md) for an introduction on using the programs.
+See [Quickstart](QuickStart.md) for an introduction on using the programs.
 
 See [Library](Library.md) for writing your own programs.
 

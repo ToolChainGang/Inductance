@@ -6,7 +6,6 @@ A python library for scanning through coil parameters.
 2. [Coil calculation errors](#coil-calculation-errors)
 3. [Interpolating turns](#interpolating-turns)
 4. [Generating CSV output](#generating-csv-output)
-5. [A note on maximizing Q](#a-note-on-maximizing-q)
 
 ## The Coil object
 
@@ -203,20 +202,12 @@ while TestCoil.l <= lMax:
 
 ## Generating CSV output
 
-The Coil() object also 
+The Coil() object also has a set of print functions for easy CSV file generation.
 
-PrintCSV("mm"):
+````
+TestCoil.PrintCSV(Units="mm")                                       # Print the numeric values as a single CSV line
 
-PrintCSVHeader(self,Units="mm",ExtraLine1="",ExtraLine2=""):
+TestCoil.PrintCSVHeader(Units="mm",ExtraLine1="",ExtraLine2="")     # Print the initial CSV header lines
 
-PrintCSVColumnHeader(self,Units="mm"):
-
-
-## A note on maximizing Q
-
-Very high Q RF coils are apparently impossible: some experimenters with excellent setups have
-suggested that the maximum Q you can achieve physically is about 1000. (Compare with 50,000
-Q variable capacitors that you can purchase). Just about anything – including the presence
-of conductive material anywhere in the vicinity of the coil – will tamp down on the Q.
-
-A Q of 200 is a reasonable goal, and 800 might be doable in special circumstances.
+TestCoil.PrintCSVColumnHeader(self,Units="mm")                      # Print the CDV column header
+````
